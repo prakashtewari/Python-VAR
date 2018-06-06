@@ -30,7 +30,7 @@ def make_var_model:
     
     2. Add model performance measures for different equations - R_square, ..      
     
-    3. Store results in a dataframe for viewing different models - indexed by Lags       
+    3. Store results in a dataframe for viewing different models - indexed by Lags -Done      
         
         
 """
@@ -38,6 +38,8 @@ from TimeSeries_Tests import *
 from statsmodels.tsa.api import VAR, DynamicVAR
 import statsmodels.api as sm
 from statsmodels.tsa.base.datetools import dates_from_str
+from statsmodels.tsa.vector_ar import plotting
+from statsmodels.tsa.stattools import acf, pacf
 
 #########
 # Load pre-loaded macroeconomic data from PANDAS
@@ -113,6 +115,7 @@ def make_var_model(data, lags = 1, actual_plot = False ):
     
     result_dict = {}
     normality_dict = {}
+    normal_var = [None] * len(data.columns)
     
     for lag in range(1, lags+1):
         
@@ -134,17 +137,24 @@ def make_var_model(data, lags = 1, actual_plot = False ):
         results.plot_forecast(steps = 5, plot_stderr = False)
         
         #test for normality of residuals
-        normality = results.test_normality(0.05)
+        for var in range(0, len(data.columns)):
+            normal_var[var] = check_normality(results.resid[data.columns[var]])
         
         print("acf plot \n")
         #acf plots of residuals of each variable for 10 lags
-        results.plot_acorr()
+        for var in range(0, len(data.columns)):
+            acf_data = pd.DataFrame(acf(results.resid[data.columns[var]])[1:10])
+            acf_data.columns = [data.columns[var]]
+            acf_data.plot(kind = "bar")
+            
+            
+            
         
         equations_lag = lag
         equation_model_data = pd.DataFrame(index = results.tvalues.index, columns = ["coefs", "std err", "tvalues", "pvalues"])
         
         writer = pd.ExcelWriter('Models.xlsx', engine='xlsxwriter')
-
+        
         #writing results of equations to different excel sheets
         for var in range(0,len(data.columns)):
             
@@ -159,7 +169,7 @@ def make_var_model(data, lags = 1, actual_plot = False ):
             
                     
         result_dict['Lag_Order_{}'.format(lag)] = results
-        normality_dict['Lag_Order_{}'.format(lag)] = normality
+        normality_dict['Lag_Order_{}'.format(lag)] = normal_var
 
         
     return result_dict, normality_dict
