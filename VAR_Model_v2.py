@@ -27,12 +27,12 @@ def make_var_model:
         Auto-correlation of residuals - Pending - acf done 
         Homoscedasiticty of residuals - Pending 
         Normally distributed - Pending - Done
+        Stationarity of residuals: Done
     
     2. Add model performance measures for different equations - R_square, ..      
     
     3. Store results in a dataframe for viewing different models - indexed by Lags -Done      
-        
-        
+                
 """
 from TimeSeries_Tests import *
 from statsmodels.tsa.api import VAR, DynamicVAR
@@ -40,6 +40,8 @@ import statsmodels.api as sm
 from statsmodels.tsa.base.datetools import dates_from_str
 from statsmodels.tsa.vector_ar import plotting
 from statsmodels.tsa.stattools import acf, pacf
+from statsmodels.graphics.gofplots import qqplot
+from pandas.plotting import autocorrelation_plot
 
 #########
 # Load pre-loaded macroeconomic data from PANDAS
@@ -103,9 +105,7 @@ model_data = temp_data[['unemp_diff', 'realgdp_logdiff', 'cpi_logdiff']]
 
 
 """
-a. Create VAR models -
-    To be updated:
-        
+a. Create VAR models -        
 """
 
 def make_var_model(data, lags = 1, actual_plot = False ):
@@ -114,65 +114,77 @@ def make_var_model(data, lags = 1, actual_plot = False ):
     model = VAR(data)
     
     result_dict = {}
-    normality_dict = {}
-    normal_var = [None] * len(data.columns)
     
-    for lag in range(1, lags+1):
+    writer = pd.ExcelWriter('Models.xlsx', engine='xlsxwriter')
         
+    for lag in range(1, lags+1):
+        #Fitting Model
         results = model.fit(maxlags = lag)
+        
+        lag_order = results.k_ar
         
         print ('Exogenous Variables for the model with Lag: %d \n '%lag+ str(results.exog_names))
         print (results.summary())
         
+        #Generating Model output
+        fitted_values = results.fittedvalues
+        forecast_values = pd.DataFrame(data = results.forecast(y= data.values[-lag_order:], steps=  5), columns = results.names)
+        results.forecast_interval(y= data.values[-lag_order:], steps = 10)
+        
+        results.plot_forecast(steps = 10, plot_stderr = True)
+        
         if actual_plot ==True:
             results.plot()
+
+        #Storing Residuals for testing purpose
+        residuals = results.resid.add_prefix('Residuals_')
+        normality_var = {}
+        stationarity_var = {}
+        acf_data = {}
+        
+        print("************* Running Stationarity and Normality for the Residuals *************\n")  
+        for column in residuals.columns:
+            #test for normality of residuals
+            normality_var[column] = check_normality(residuals[column])
+            #test for stationarity of residuals
+            stationarity_var[column] = check_stationarity(residuals[column])
+            #acf plots of residuals of each variable for 10 lags
+            acf_data[column] = acf(residuals[column])[0:10]       
+        
+        print("************* Plotting ACF Plots for the Residuals *************\n")   
+        pd.DataFrame(data = acf_data).plot(kind = "bar", title = 'ACF plots for the residuals Lag_Order_{}'.format(lag_order))
+        plt.savefig('ACF_Plot_Lag_Order_{}.png'.format(lag_order))
             
-        fitted_values = results.fittedvalues
-        
-        lag_order = results.k_ar
-        
-        forecast_values = pd.DataFrame(data = results.forecast(y= data.values[-lag_order:], steps=  5), columns = results.names)
-        
-        results.forecast_interval(y= data.values[-lag_order:], steps = 5)
-        results.plot_forecast(steps = 5, plot_stderr = False)
-        
-        #test for normality of residuals
-        for var in range(0, len(data.columns)):
-            normal_var[var] = check_normality(results.resid[data.columns[var]])
-        
-        print("acf plot \n")
-        #acf plots of residuals of each variable for 10 lags
-        for var in range(0, len(data.columns)):
-            acf_data = pd.DataFrame(acf(results.resid[data.columns[var]])[1:10])
-            acf_data.columns = [data.columns[var]]
-            acf_data.plot(kind = "bar")
-            
-            
-            
-        
-        equations_lag = lag
-        equation_model_data = pd.DataFrame(index = results.tvalues.index, columns = ["coefs", "std err", "tvalues", "pvalues"])
-        
-        writer = pd.ExcelWriter('Models.xlsx', engine='xlsxwriter')
-        
+        equation_model_data = pd.DataFrame(index = results.tvalues.index)
+
         #writing results of equations to different excel sheets
-        for var in range(0,len(data.columns)):
-            
-            sheet_name =  data.columns[var] + "lag" + str((equations_lag))
+        for var, column in enumerate(data.columns):
+            print('Writing in excel for variable {}'.format(column))
+            sheet =  "lag" + str(lag_order)
+            coefs = []
+            for lag in range(lag_order):
+                coefs.append(results.coefs[lag][var])
             intercept = np.asarray(results.intercept[var])
-            coefs = results.coefs[0][var]
             equation_model_data["coefs"] = np.append(intercept, coefs)
-            equation_model_data["std err"] = results.stderr
-            equation_model_data["tvalues"] = results.tvalues
-            equation_model_data["pvalues"] = results.pvalues
-            equation_model_data.to_excel(writer,sheet_name)
+            equation_model_data["std err"] = results.stderr[column]
+            equation_model_data["t-values"] = results.tvalues[column]
+            equation_model_data["p-values"] = results.pvalues[column]
+            equation_model_data["stationarity check on Residuals"] = stationarity_var['Residuals_'+column]
+            equation_model_data["normality check on Residuals"] = normality_var['Residuals_'+column]
+            equation_model_data.to_excel(writer, sheet_name = sheet, startrow = var*10, startcol=0)
             
-                    
-        result_dict['Lag_Order_{}'.format(lag)] = results
-        normality_dict['Lag_Order_{}'.format(lag)] = normal_var
-
+            print('Results written to excel file')        
         
-    return result_dict, normality_dict
+        result_dict['Lag_Order_{}'.format(lag_order)] = equation_model_data
+                   
+    return result_dict
 
-make_var_model(data = mdata1, lags = 1, actual_plot = False )
+#make_var_model(data = mdata1, lags = 1, actual_plot = False )
+    
+Results = make_var_model(data = model_data, lags = 2, actual_plot = False )
+
+"""
+Checks:
+"""
+
     
