@@ -1,16 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 Created on Wed May 30 12:50:36 2018
-
 @author: Prakash.Tiwari
-
 Functions -->
-
 check_summary : Basic summary stats
 check_distribution : Plot histogram
 check_stationarity : Check stationarity
 check_plots : Basic line plots
-
 """
 import os
 import numpy as np 
@@ -50,21 +46,25 @@ def check_stationarity(series):
     Ho : The series is non-stationary and has a unit root --> p-value > 0.05
     H1 : The series is stationary and does not have a unit root --> p-value < 0.05
     """
-    
+   
     X = series.values
     result = adfuller(X)
-    print('ADF Statistic: %f' % result[0])
-    print('p-value: %f' % result[1])
-    print('Critical Values:')
+    print('Test: Running ADF Stationarity test for {} \n\t ADF test statistic: {} \n\t p-value: {} '.format(series.name, result[0], result[1]))
+
+    print('\n\tCritical Values:')
     for key, value in result[4].items():
     	print('\t%s: %.3f' % (key, value))
     
     if result[4]['5%'] > result[0]:
-        print ('Series is stationary at 95% CI')
+        conclusion = 'Series is Stationary @95% CI'
+        print ('\t Conclusion: Series is stationary at 95% CI\n')
     elif result[4]['10%'] > result[0]:
-        print ('Series is stationary at 90% CI but non-stationary at 95% CI')
+        conclusion = 'Series is Stationary @90% CI'
+        print ('\t Conclusion: Series is stationary at 90% CI but non-stationary at 95% CI\n')
     else:
-        print ('Series is non-stationary')
+        conclusion = 'Series is non-Stationary'
+        print ('\t Conclusion: Series is non-stationary\n')
+    return conclusion
         
 #Series Plots:
 def check_plots(series):
@@ -75,12 +75,15 @@ def check_plots(series):
     plt.show()        
     
 def check_normality(series):
-    res = stats.normaltest(series)
-    if(res[1]< 0.05):
-        return res, 'not normal'
+    result = stats.normaltest(series)
+    
+    print('Test: Running Agostino and Pearson Normality test for {} \n\t Normality test statistic: {} \n\t p-value: {} '.format(series.name, result[0], result[1]))
+    
+    if(result[1]< 0.05):
+        conclusion = 'Not Normally Distributed'
+        print('\t Conclusion: {} is not normally distributed at 95% CI \n'.format(series.name))
     else:
-        return res, 'normal'
-
-
-    
-    
+        conclusion = 'Normally Distributed'
+        print('\t Conclusion: {} is normally distributed at 95% CI \n'.format(series.name))
+        
+    return conclusion    
