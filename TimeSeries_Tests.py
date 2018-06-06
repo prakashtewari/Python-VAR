@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from statsmodels.tsa.stattools import adfuller
+from scipy import stats
 
 #Summary Statistics
 def check_summary(series):
@@ -25,7 +26,7 @@ def check_summary(series):
     """
     
     X = series.values
-    split = len(X) / 2
+    split =int( len(X) / 2)
     X1, X2 = X[0:split], X[split:]
     meanoverall, mean1, mean2 = X.mean(), X1.mean(), X2.mean()
     varoverall, var1, var2 = X.var(), X1.var(), X2.var()
@@ -59,11 +60,11 @@ def check_stationarity(series):
     	print('\t%s: %.3f' % (key, value))
     
     if result[4]['5%'] > result[0]:
-        print 'Series is stationary at 95% CI'
+        print ('Series is stationary at 95% CI')
     elif result[4]['10%'] > result[0]:
-        print 'Series is stationary at 90% CI but non-stationary at 95% CI'
+        print ('Series is stationary at 90% CI but non-stationary at 95% CI')
     else:
-        print 'Series is non-stationary'
+        print ('Series is non-stationary')
         
 #Series Plots:
 def check_plots(series):
@@ -72,3 +73,14 @@ def check_plots(series):
     """
     plt.plot(series)
     plt.show()        
+    
+def check_normality(series):
+    res = stats.normaltest(series)
+    if(res[1]< 0.05):
+        return res, 'not normal'
+    else:
+        return res, 'normal'
+
+
+    
+    
